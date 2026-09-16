@@ -21,21 +21,36 @@ jobs:
       # Pas d'étape "Installer le SDK Android" ici : les runners ubuntu-latest
       # embarquent déjà le SDK (platform-tools, platform 34, build-tools,
       # licences acceptées) sous /usr/local/lib/android/sdk. Gradle le trouve
-      # tout seul via la variable d'environnement ANDROID_HOME. Ajouter un
-      # sdkmanager manuel casse le build : le paquet legacy "tools" qu'il
-      # demandait par défaut a été retiré du dépôt Google il y a plusieurs
-      # années ("Failed to find package 'tools'").
+      # tout seul via la variable d'environnement ANDROID_HOME.
 
       - name: Configurer Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
 
+      # Le projet Android (settings.gradle.kts) n'est pas forcément à la
+      # racine du dépôt (ex. dépôt "Local-radio" contenant un sous-dossier
+      # "LocalRadio/"). On le retrouve automatiquement au lieu de supposer
+      # un chemin fixe, pour que le build ne dépende plus de la structure
+      # exacte du dépôt sur GitHub.
+      - name: Localiser le projet Gradle
+        id: locate
+        run: |
+          FOUND=$(find . -maxdepth 4 \( -name 'settings.gradle.kts' -o -name 'settings.gradle' \) | head -n 1)
+          if [ -z "$FOUND" ]; then
+            echo "Impossible de trouver settings.gradle(.kts) dans le dépôt." >&2
+            exit 1
+          fi
+          DIR=$(dirname "$FOUND")
+          echo "Projet Gradle trouvé dans : $DIR"
+          echo "gradle_dir=$DIR" >> "$GITHUB_OUTPUT"
+
       - name: Compiler l'APK de debug
+        working-directory: ${{ steps.locate.outputs.gradle_dir }}
         run: gradle assembleDebug --stacktrace
 
       - name: Publier l'APK généré
         uses: actions/upload-artifact@v4
         with:
           name: LocalRadio-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.locate.outputs.gradle_dir }}/app/build/outputs/apk/debug/app-debug.apk

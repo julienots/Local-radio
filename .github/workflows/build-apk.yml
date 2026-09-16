@@ -28,20 +28,35 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      # Le projet Android (settings.gradle.kts) n'est pas forcément à la
-      # racine du dépôt. On le cherche dans tout le dépôt (sans limite de
-      # profondeur cette fois) ; si on ne le trouve toujours pas, on affiche
-      # l'arborescence du dépôt pour comprendre ce qui a réellement été
-      # poussé sur GitHub, au lieu d'échouer à l'aveugle.
+      # Le dépôt contient parfois le projet sous forme d'archive .zip non
+      # décompressée (cas courant en poussant depuis un téléphone) au lieu
+      # des fichiers extraits. On cherche settings.gradle(.kts) ; s'il est
+      # introuvable, on dézippe toute archive .zip trouvée à la racine et on
+      # cherche à nouveau, avant d'abandonner avec l'arborescence en clair.
       - name: Localiser le projet Gradle
         id: locate
         run: |
-          FOUND=$(find . -type d \( -name '.git' -o -name '.github' \) -prune -o \( -name 'settings.gradle.kts' -o -name 'settings.gradle' \) -print | head -n 1)
+          find_settings() {
+            find . -type d \( -name '.git' -o -name '.github' \) -prune -o \( -name 'settings.gradle.kts' -o -name 'settings.gradle' \) -print | head -n 1
+          }
+
+          FOUND=$(find_settings)
+
           if [ -z "$FOUND" ]; then
-            echo "::error::Impossible de trouver settings.gradle(.kts) dans le dépôt. Arborescence actuelle :"
+            shopt -s nullglob
+            for z in *.zip; do
+              echo "Archive trouvée : $z -> extraction dans extracted_project/"
+              unzip -o -q "$z" -d extracted_project
+            done
+            FOUND=$(find_settings)
+          fi
+
+          if [ -z "$FOUND" ]; then
+            echo "::error::Impossible de trouver settings.gradle(.kts), même après extraction des .zip. Arborescence actuelle :"
             find . -type d \( -name '.git' -o -path '*/.git/*' \) -prune -o -print | sed 's|^\./||' | sort
             exit 1
           fi
+
           DIR=$(dirname "$FOUND")
           echo "Projet Gradle trouvé dans : $DIR"
           echo "gradle_dir=$DIR" >> "$GITHUB_OUTPUT"

@@ -29,16 +29,17 @@ jobs:
           gradle-version: "8.7"
 
       # Le projet Android (settings.gradle.kts) n'est pas forcément à la
-      # racine du dépôt (ex. dépôt "Local-radio" contenant un sous-dossier
-      # "LocalRadio/"). On le retrouve automatiquement au lieu de supposer
-      # un chemin fixe, pour que le build ne dépende plus de la structure
-      # exacte du dépôt sur GitHub.
+      # racine du dépôt. On le cherche dans tout le dépôt (sans limite de
+      # profondeur cette fois) ; si on ne le trouve toujours pas, on affiche
+      # l'arborescence du dépôt pour comprendre ce qui a réellement été
+      # poussé sur GitHub, au lieu d'échouer à l'aveugle.
       - name: Localiser le projet Gradle
         id: locate
         run: |
-          FOUND=$(find . -maxdepth 4 \( -name 'settings.gradle.kts' -o -name 'settings.gradle' \) | head -n 1)
+          FOUND=$(find . -type d \( -name '.git' -o -name '.github' \) -prune -o \( -name 'settings.gradle.kts' -o -name 'settings.gradle' \) -print | head -n 1)
           if [ -z "$FOUND" ]; then
-            echo "Impossible de trouver settings.gradle(.kts) dans le dépôt." >&2
+            echo "::error::Impossible de trouver settings.gradle(.kts) dans le dépôt. Arborescence actuelle :"
+            find . -type d \( -name '.git' -o -path '*/.git/*' \) -prune -o -print | sed 's|^\./||' | sort
             exit 1
           fi
           DIR=$(dirname "$FOUND")

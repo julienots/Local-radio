@@ -1,42 +1,41 @@
-name: Build APK
+name: Build LocalRadio APK
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ "main", "master" ]
+  workflow_dispatch: {}
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Récupérer le code
+        uses: actions/checkout@v4
 
-      - name: Extraire LocalRadio.zip
-        run: unzip -o LocalRadio.zip -d .
-
-      - name: Installer Java 17
+      - name: Configurer Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Installer le SDK Android
-        uses: android-actions/setup-android@v3
+      # Pas d'étape "Installer le SDK Android" ici : les runners ubuntu-latest
+      # embarquent déjà le SDK (platform-tools, platform 34, build-tools,
+      # licences acceptées) sous /usr/local/lib/android/sdk. Gradle le trouve
+      # tout seul via la variable d'environnement ANDROID_HOME. Ajouter un
+      # sdkmanager manuel casse le build : le paquet legacy "tools" qu'il
+      # demandait par défaut a été retiré du dépôt Google il y a plusieurs
+      # années ("Failed to find package 'tools'").
 
-      - name: Générer le wrapper Gradle
-        working-directory: LocalRadio
-        run: gradle wrapper --gradle-version 8.7
+      - name: Configurer Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
 
-      - name: Rendre gradlew exécutable
-        working-directory: LocalRadio
-        run: chmod +x gradlew
+      - name: Compiler l'APK de debug
+        run: gradle assembleDebug --stacktrace
 
-      - name: Compiler l'APK
-        working-directory: LocalRadio
-        run: ./gradlew assembleDebug
-
-      - name: Uploader l'APK
+      - name: Publier l'APK généré
         uses: actions/upload-artifact@v4
         with:
-          name: localradio-apk
-          path: LocalRadio/app/build/outputs/apk/debug/app-debug.apk
+          name: LocalRadio-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
